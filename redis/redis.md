@@ -127,4 +127,125 @@ robj *createStringObject(const char *ptr, size_t len) {
 > 
 > 或者针对热点key，不设置过期时间。
 
+# 9、list底层是什么数据结构实现的？什么时候使用ziplist什么时候使用linkedList
+> 在redis中底层是通过双向链表或者压缩链表ziplist来实现list结构的。
+> 
+> 当list同时满足以下两个条件时，底层采用了ziplist来进行存储
+- list对象保存的所有字符串元素的长度都小于64字节；（通过配置项list-max-ziplist-value控制）
+- list对象保存的元素数量小于512个（通过配置项list-max-ziplist-entries）
+# 10、什么是ziplist？
+> ![img_5.png](img_5.png)
+> 看代码注解我们知道ziplist的结构如下图所示
+> ![img_6.png](img_6.png)
+> 各字段含义如下
+- zlbytes：表示ziplist的总字节数
+- zltail：表示列表最后一个元素的偏移量
+- zllen：表示列表中entry的数量
+- zlend：用255来表示结束符
+> 每个entry的元素含义如下
+- prevlen:前一个entry的大小
+  - 占用1字节：当前一个entry的大小小于254字节时，展示一个字节大小
+  - 占用5字节：超过254字节时，取5字节，来表示前一个entry的大小
+- encoding：表示当前entry长度编码方式，占用1字节
+- len：表示自身长度，占4字节
+- content:保存的实际数据
+> ziplist存在问题：连锁更新问题；因为后一个entry记录前一个entry的大小，一开始如果
+> 前一个entry的大小是253字节时，后面的prevlen只占用一个字节，当前面的entry超过254字节时，
+> 会引发后面的entry也需要扩大容量，如果扩大的容量刚好也超过了254字节，那么会传递下去，引发
+> 下一个字节的prevlen需要扩容，从而引发连续更新的问题。
+> 
+> 如果ziplist存在的数据太多，一会导致检索数据更加耗时，ziplist定位某个数据的时间复杂度为O(n)
+# 11、什么是quicklist？
+```c
+typedef struct quicklistNode {
+    struct quicklistNode *prev;         //前一个quicklistNode
+    struct quicklistNode *next;         //后一个quicklistNode
+    unsigned char *zl;                  //quicklistNode指向的ziplist
+    unsigned int sz;                    //ziplist的字节大小
+    unsigned int count : 16;            //ziplist中的元素个数 
+    unsigned int encoding : 2;          //编码格式，原生字节数组或压缩存储
+    unsigned int container : 2;         //存储方式
+    unsigned int recompress : 1;        //数据是否被压缩
+    unsigned int attempted_compress : 1; //数据能否被压缩
+    unsigned int extra : 10;            //预留的bit位
+} quicklistNode;
+```
+> quicklist其实是实现list底层的一种数据结构。list底层实现已经有了ziplist和链表
+> 为什么还需要使用quicklist呢？
+> 
+> 链表需要维护前后指针，浪费空间；ziplist可以更高效利用内存，但是元素过多，又会导致查询数据复杂度增高。
+> 
+> quicklist实际上就是将两者进行结合使用。链表中的元素就是一个ziplist
+> 
+> 通过将ziplist拆分到每个链表元素中，可以减少ziplist引起的连锁更新。
+> 但是还无法彻底解决连锁更新问题，于是在redis 5.0 引入一个新的数据结构
+> listpack来彻底解决这个问题。
+# 12、什么是listpack？listpack是如何解决连锁更新的问题？
+![img_7.png](img_7.png)
+如果解决连锁更新的问题，每个entry只保存自身的长度，而没有去保存前一个数据或者后一个数据的长度，自然就不存在
+连锁更新的问题。
 
+# 13、在redis中如果设置过期时间？
+> 在redis有四个命令方式设置过期时间
+> 
+> EXPIRE <key> <ttl>: 将key的生存时间设置为ttl秒
+> 
+> PEXPIRE <key> <ttl>: 将key的生存时间设置为ttl毫秒
+> 
+> EXPIREAT <key> <timestamp>: 将key的过期时间设置为timestamp所指定的秒数的时间戳
+> 
+> PEXPIREAT <key> <timestamp>：将key的过期时间设置为timestamp所指定的豪秒数的时间戳
+> 
+> 也就是一个是指定存活多少时间，一个是指定存活到那个时间点。
+> 
+> 但底层都是通过PEXPIREAT来进行设置的
+> 
+# 14、过期时间存储在哪里？
+```c
+typedef struct redisDb {
+    dict *dict;                 /* The keyspace for this DB */
+    // 存储过期时间的dict
+    dict *expires;              /* Timeout of keys with a timeout set */
+} redisDb;
+```
+> 在redis中通过redisDb数据结构的expires存储所有过期的时间key
+> 也就是通过redis本身的hash结构来存储过期时间的。
+
+# 15、有序集合Sorted Set在redis中是如果是如何实现的？
+> 在最开头我们已经知道Sorted Set底层是通过压缩链表和跳表来实现。
+> 那什么时候使用压缩链表什么时候使用跳表呢？
+> 
+> 同时满足以下两个条件时，采用ziplist
+- 有序集合保存的元素数量小于128个（zset-max-ziplist-entries）
+- 有序集合保存的所有元素成员的长度都小于64字节（zset-max-ziplist-value）
+
+# 16、什么是skipList?
+```cassandraql
+typedef struct zskiplist {
+    struct zskiplistNode *header, *tail;
+    unsigned long length;
+    int level;
+} zskiplist;
+
+typedef struct zskiplistNode {
+    sds ele;
+double score;
+struct zskiplistNode *backward;
+struct zskiplistLevel {
+        struct zskiplistNode *forward;
+unsigned long span;
+} level[];
+} zskiplistNode;
+```
+> ![img_8.png](img_8.png)
+
+# 17、Sorted Set 如何实现O(1)的查询复杂度
+> 如果底层采用的是skipList 肯定是无法实现O(1)的时间复杂度。
+> 这个想一想什么数据查询时间复杂度为O(1)，hash结构，所以底层如果是skipList作为存储
+> zset实际是skikList + dict来实现的，也就是通过空间换时间
+```c
+typedef struct zset {
+    dict *dict;
+    zskiplist *zsl;
+} zset;
+```
