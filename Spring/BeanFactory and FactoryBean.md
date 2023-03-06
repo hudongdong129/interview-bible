@@ -1,12 +1,11 @@
 # BeanFactory
 说明： spring容器的底层接口，可以根据bean定义的信息，返回对应的实例对象，支持整个sring的生命周期流程。
 提供的方法：
-
-
+![](20230306224414.jpg)
 # FactoryBean
 说明： 就是一个简单的对象工程，实现了此接口的方法在整个bean周期中，可以使用自定义的方式来创建对象，而不需要进行默认的bean流程的创建。
 提供的方法
-
+![](20230306224834.jpg)
 
 使用
 ```java
@@ -41,16 +40,23 @@ public static void main(String[] args) {
 ```
 这时候细心的同学不知道有没有发现，那我需要怎么获取对应的myFactoryBean对象呢？
 这时我们看源码在BeanFactory中定义了一个
-
-
+```java
+    /**
+	 * Used to dereference a {@link FactoryBean} instance and distinguish it from
+	 * beans <i>created</i> by the FactoryBean. For example, if the bean named
+	 * {@code myJndiObject} is a FactoryBean, getting {@code &myJndiObject}
+	 * will return the factory, not the instance returned by the factory.
+	 */
+    String FACTORY_BEAN_PREFIX = "&";
+```
 也就是如果我们需要获取FactoryBean的实例而不是对应的getObject方法时，需要在getBean的前面加个&，也就是如下所示
 ```java
 ApplicationContext bf = new ClassPathXmlApplicationContext("beanFactory.xml");
 MyFactoryBean myFactoryBean = bf.getBean("&myFactoryBean", MyFactoryBean.class);
 ```
-
+![](20230306225054.jpg)
 并且在BeanFactoryUtils.transformedBeanName()，方法中进行判断是否带了对应的&符号，如果带了就返回对应的工厂Bean实力，如果没有带则获取调用对应的getObject方法返回对应的具体bean实力（Person对象）
-
+![](20230306225158.jpg)
 ```java
 // 判断是否是&开头
 public static boolean isFactoryDereference(@Nullable String name) {
