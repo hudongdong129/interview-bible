@@ -50,3 +50,5 @@ public interface HandlerInterceptor {
 > 
 > FactoryBean就是一个简单的对象工程，实现了此接口的方法在整个bean周期中，可以使用自定义的方式来创建对象，而不需要进行默认的bean流程的创建。
 > 
+> 更详细说明:请参看
+[BeanFacory和FactoryBean详解](https://github.com/hudongdong129/interview-bible/blob/main/Spring/BeanFactory%20and%20FactoryBean.md)
