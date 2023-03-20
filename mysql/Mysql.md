@@ -42,8 +42,7 @@ select master_pos_wait(file, pos[, timeout]);
 # 这样可以减少使用show master status命令
 select wait_for_executed_gtid_set(gtid_set, 1);
 ```
-# 3、如果表A两条数据，表B有两条数据，那么语句 select * from A left join B on A.param = B.param
-可能有几条结果？
+# 3、如果表A两条数据，表B有两条数据，那么语句 select * from A left join B on A.param = B.param 可能有几条结果？
 > 答案：2~4条
 > 
 > 2条的情况：如果表A和表B两个关联的数据不相等，或者刚好一一对应，那么返回的结果就是2条
@@ -51,3 +50,14 @@ select wait_for_executed_gtid_set(gtid_set, 1);
 > 3条的情况：如果表A中的两个数据不一致，其中一条数据和表B刚好都匹配，则返回3条数据。
 > 
 > 4条的情况：如果表A中的数据相同并且都能和表B的数据都能匹配上，返回的结果为4条
+
+# 4、如果表A两条数据，表B有两条数据，那么语句 select * from A inner join B on A.param = B.param 可能有几条结果？
+> 答案:0、1、2、4条
+> 
+> 0条的情况： 如果A B关联的字段两个表的数据不相等。
+> 
+> 1条的情况：如果A B关联是字段刚好有一条数据A B字段相同。
+> 
+> 2条的情况：如果A B关联的字段刚好两张表字段一一对应，或者A中一条数据对应B中两条数据
+> 
+> 4条的情况：如果A的关联字段值相同，切和B中两条数据都相同，则返回4条。
