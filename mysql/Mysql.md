@@ -42,3 +42,12 @@ select master_pos_wait(file, pos[, timeout]);
 # 这样可以减少使用show master status命令
 select wait_for_executed_gtid_set(gtid_set, 1);
 ```
+# 3、如果表A两条数据，表B有两条数据，那么语句 select * from A left join B on A.param = B.param
+可能有几条结果？
+> 答案：2~4条
+> 
+> 2条的情况：如果表A和表B两个关联的数据不相等，或者刚好一一对应，那么返回的结果就是2条
+> 
+> 3条的情况：如果表A中的两个数据不一致，其中一条数据和表B刚好都匹配，则返回3条数据。
+> 
+> 4条的情况：如果表A中的数据相同并且都能和表B的数据都能匹配上，返回的结果为4条
