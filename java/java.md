@@ -24,3 +24,15 @@ public static void main(String[] args) {
         System.out.println(collect.toString());
     }
 ```
+
+# 3、maven中的scope有哪些取值和作用？
+> Maven中使用 scope 来指定当前包的依赖范围和依赖的传递性
+> scope的取值只要有compile、provided、runtime、test、system
+
+| scope取值 | 有效范围（compile, runtime, test)| 依赖传递 |
+|:--------:| -------------:|-------------:|
+| compile | all | 是 |
+| provided| compile, test |否 |
+| runtime| runtime,test |是 |
+| test| test |否 |
+| system| compile, test |是 |
