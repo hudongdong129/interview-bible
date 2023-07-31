@@ -207,5 +207,79 @@
 > 
 > JDK1.7之前，永久代空间不足
 
+# 23、什么情况下必须对类进行初始化？
+> 1、遇到new、getstatic、putstatic或invokestatic这4条字节码指令时，如果类没有进行过初始化，则需要先触发其初始化阶段。
+> 
+> 2、使用java.lang.reflect包的方法对类进行反射调用的时候，如果类没有进行过初始化，则需要先触发其初始化。
+> 
+> 3、当初始化一个类的时候，如果发现其父类还没有进行过初始化，则需要先触发其父类的初始化。
+> 
+> 4、当虚拟机启动时，用户需要指定一个要执行的主类（包含main()方法的那个类），虚拟机会先初始化这个主类。
+> 
+> 5、当使用JDK 1.7的动态语言支持时，如果一个java.lang.invoke.MethodHandle实例最后的解析结果
+> REF_getStatic、REF_putStatic、REF_invokeStatic的方法句柄，并且这个方法句柄所对应的类没有进行过初始化，则需要先触发其初始化。
+> 
+> 6、当一个接口中定义了JDK 1.8新加入的默认方法（被default关键字修饰的接口方法）时，
+> 如果有这个接口的实现类发生了初始化，那该接口要在其之前被初始化。
+
+# 24、几种不会出发类初始化的情况
+```java
+public class ParentClass {
+    
+    static {
+        System.out.println("ParentClass init!");
+    }
+    public static int value = 1234;
+}
+
+public class ChildClass extends ParentClass {
+    static {
+        System.out.println("ChildClass init!");
+    }
+}
+
+public class Test {
+    public static void main(String[] args) {
+        System.out.println(ChildClass.value);
+    }
+}
+```
+> 只会输出ParentClass init!，不会输出ChildClass init!，因为虽然ChildClass继承了ParentClass，但是在编译期间，
+> 两个类之间没有任何联系，只有在运行期间，父类引用指向子类对象时，才会初始化子类。
+```java
+
+public class ParentClass {
+    
+    static {
+        System.out.println("ParentClass init!");
+    }
+    public static int value = 1234;
+}
+
+public class test {
+    public static void main(String[] args) {
+        ParentClass[] parentClasses = new ParentClass[10];
+    }
+}
+```
+> 不会输出ParentClass init!，因为虽然创建了ParentClass数组，但是数组中的元素都是null，没有创建ParentClass对象，所以不会初始化ParentClass类。
+```java
+public class ParentClass {
+    
+    static {
+        System.out.println("ParentClass init!");
+    }
+    
+    public static final String HELLO_WORLD = "hello world";
+}
+
+public class Test {
+    public static void main(String[] args) {
+        System.out.println(ParentClass.HELLO_WORLD);
+    }
+}
+```
+> 不会输出ParentClass init!，HELLO_WORLD已经被放入到Test类的常量池中，所以不会初始化ParentClass类。
+
 
 
