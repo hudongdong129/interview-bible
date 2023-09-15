@@ -254,6 +254,21 @@ protected Object initializeBean(final String beanName, final Object bean, @Nulla
 | 代理是由目标对象创建的, 并且切面应用在这些代理上|在执行应用程序之前 (在运行时) 前, 各方面直接在代码中进行织入 |
 | 性能差|性能更好 |
 
+# 8、Spring 失效的几种场景
+> 1、使用注解@Transactional时，如果方法是private的, 或者被final，那么事务失效
+> 
+> 2、类内部之间的方法调用导致的失效
+> 
+> 3、方法内部捕获了对应的异常，没有抛出相关的异常
+> 
+> 4、使用注解@Transactional时,rollbackFor 指定的异常，未包含对应方法抛出的异常，导致事务失效
+> 
+> 5、底层数据库本身不支持事务，比如MyISAM
+> 
+> 6、本身不是spring管理的bean对象
+> 
+> 7、多线程调用时。
+
 
 
 

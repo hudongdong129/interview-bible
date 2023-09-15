@@ -18,7 +18,7 @@ private void grow(int minCapacity) {
 - 如果扩容后大小大于最大值，则使用最大值 及 Integer.MAX_VALUE - 8 的值
 # 2、ArrayList能遍历调用remove方法吗？
 ```java
-# 普通remove方法，通过下标去删除元素，只要未数据越界不会抛异常
+# 普通remove方法，通过下标去删除元素，只要数据未越界不会抛异常
 public E remove(int index) {
         rangeCheck(index);
 
