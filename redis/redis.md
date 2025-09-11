@@ -249,3 +249,35 @@ typedef struct zset {
     zskiplist *zsl;
 } zset;
 ```
+# 18、Redis启动时，主要有哪些步骤？
+> 1、基础初始化阶段（设置时区、随机种子）
+> 2、哨兵模式检查，RDB/AOF监测
+> 3、运行参数解析（加载配置启动参数，覆盖默认配置（config.c 的 loadServerConfig 函数））
+> 4、初始化Server
+> 5、执行事件驱动框架
+
+# 19、IO多路复用，select、poll、epoll的区别
+- select: 单个进程能监控的文件描述符数量有限制（1024），每次调用都需要将文件描述符集合从用户态拷贝到内核态，效率较低。
+- poll： 没有文件描述符数量限制，但是每次调用都需要将文件描述符集合从用户态拷贝到内核态，效率较低。
+- epoll: 没有文件描述符数量限制，采用事件驱动的方式，不需要每次调用都将文件描述符集合从用户态拷贝到内核态，效率较高。
+
+# 20、Redis的Reactor模型用的什么模型？
+> Reactor模型主要分为3类
+- 单 Reactor 单线程：accept -> read -> 处理业务逻辑 -> write 都在一个线程
+- 单 Reactor 多线程：accept/read/write 在一个线程，处理业务逻辑在另一个线程
+- 多 Reactor 多线程 / 进程：accept 在一个线程/进程，read/处理业务逻辑/write 在另一个线程/进程
+> redis在6.0之前使用的是单Reactor单线程模型，会有以下几个问题？
+- 单线程处理能力有限，无法充分利用多核CPU的优势
+- 单线程在处理慢查询时，可能会阻塞其他请求的处理
+- 并发请求量大时，读取/写回数据存在瓶颈
+> 在6.0版本之后，redis引入了多线程IO模型，主要是将读写数据的操作放到多个线程中进行处理
+
+# 21、Redis服务端最大可以连接多少个客户端连接？
+> Redis服务端最大可以连接的客户端连接数，主要受以下几个因素影响
+```cassandraql
+//调用aeCreateEventLoop函数创建aeEventLoop结构体，并赋值给server结构的el变量
+server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
+```
+> maxclients 变量决定了Redis服务端最大可以连接的客户端连接数，默认值为1000,在redis的redis.conf中可以配置
+> CONFIG_FDSET_INCR定义在server.h中 32 + 96 
+> 当连接超过这个大小时，会宝
