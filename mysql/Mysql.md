@@ -62,4 +62,38 @@ select wait_for_executed_gtid_set(gtid_set, 1);
 > 
 > 4条的情况：如果A的关联字段值相同，切和B中两条数据都相同，则返回4条。
 
-# 5、
+# 5、有了Binlog为什么还需要有redo log,binlog和redo log怎么保证数据一直性？
+> redo是innodb存储引擎的日志，binlog是mysql server端的日志，redo log 可以进行wal(Write Ahead Log)预写日志。
+> 当一条数据更新时，会先写入redo log（prepare）状态，在写入binlog，然后再提交redo log（commit）状态 - 这就是两阶段提交流程
+![img.png](img.png)
+> 如果在进行事务写入的时候mysql宕机了，进行进行数据恢复呢？
+- 如果是在redo log（prepare）阶段，还没写入binlog，会根据redo log记录的XID去查询binlog如果没有就丢弃这条数据
+- 如果是在binlog写入后，redo log（commit）阶段宕机了，那么会根据redo log记录的XID去查询binlog，如果有就进行数据恢复
+- 如果是在redo log（commit）阶段宕机了，binlog也写入了，那么会根据redo log记录的XID去查询binlog，如果有就进行数据恢复
+- 所以进行数据恢复时，实际是已是否写入了binlog为准，只要binlog写入，这个数据就可以恢复，如果没有写入，则需要抛弃这条数据。
+
+# 6、两阶段提交会有什么问题？
+> 为了保证每个事务的持久化，我们需要配置innodb_flush_log_at_trx_commit = 1 并且 sync_binlog = 1的双一配置，这样一个事务提交就需要进行两次刷盘（redo + binlog）
+
+# 7、怎么解决双1下的IO瓶颈
+> 就是引入组提交，当有多个事务提交时，会将多个 Binlog 刷盘操作合并成一个，以减少磁盘 I/O 次数。
+> 因为持久化操作主要分为write和fsync,write操作主要是将数据写入到操作系统的文件系统缓存中，fsync操作才是真正将数据写入到磁盘中
+
+
+# 8、针对binlog和redo的刷盘有哪些参数配置？
+> 针对binlog刷盘主要由sync_binlog参数控制
+- sync_binlog=0 的时候，表示每次提交事务都只 write，不 fsync（可能会存在事务丢失的情况）
+- sync_binlog=1 的时候，表示每次提交事务都会执行 fsync
+- sync_binlog=N(N>1) 的时候，表示每次提交事务都 write，但累积 N 个事务后才 fsync（可能丢失N个事务数据）
+> 针对redo刷盘主要由innodb_flush_log_at_trx_commit参数控制
+- innodb_flush_log_at_trx_commit = 0 的时候，表示每次事务提交时都只是把redo log留在redo log buffer中，InnoDB有一个后台线程，每隔1秒，就会把redo log buffer中的日志，调用write写到文件系统的page cache，然后调用fsync持久化到磁盘
+> 其中redo log buffer里的数据可能是某些事务中间过程的redo log，也会被持久化到磁盘,
+- innodb_flush_log_at_trx_commit = 1 的时候，表示每次事务提交时都将 redo log 直接持久化到磁盘
+- innodb_flush_log_at_trx_commit = 2 的时候，表示每次事务提交时都只是把 redo log 写到 page cache
+
+# 9、redo log和binlog通过什么进行关联？
+> 它们有一个共同的数据字段，叫 XID
+
+# binlog日志，怎么确定是一个完整事务提交？
+- statement 格式的 binlog，最后会有 COMMIT；
+- row 格式的 binlog，最后会有一个 XID event
