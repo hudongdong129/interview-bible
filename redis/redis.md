@@ -280,4 +280,46 @@ server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
 ```
 > maxclients 变量决定了Redis服务端最大可以连接的客户端连接数，默认值为1000,在redis的redis.conf中可以配置
 > CONFIG_FDSET_INCR定义在server.h中 32 + 96 
-> 当连接超过这个大小时，会宝
+> 当连接超过这个大小时，会报错
+
+# 22、Redis 6.0之后引入多线程，怎么保证线程安全？
+> redis在6.0版本之后引入了多线程IO模型，主要是将读写数据的操作放到多个线程中进行处理
+> 但是命令的执行还是在主线程中进行处理的，所以不会存在线程安全问题，从下图可以看出，引入多线程只要在
+> 命令读取、命令解析和结果返回是多线程，但在命令执行阶段，还是主IO线程进行处理。
+![img_9.png](img_9.png)
+
+# Redis什么情况下会进行缓存淘汰
+> 根据redis.conf中的配置项maxmemory来决定redis的内存使用上限，当server
+> 使用的实际内存量超出该阈值时，server就会根据 maxmemory-policy 配置项定义的策略，执行内存淘汰操作；
+> maxmemory-policy配置项主要有以下几种策略
+![img_10.png](img_10.png)
+
+# 在使用LRU进行作为淘汰算法时，需要关注的点
+> redis的LRU算法并不是严格意义上的LRU算法，而是近似LRU算法，只会随机选取一部分键值对来进行淘汰
+> 在redis这个LRU的时间值是存在RedisObject结构体中
+```cassandraql
+typedef struct redisObject {
+    unsigned type:4;
+    unsigned encoding:4;
+    unsigned lru:LRU_BITS;  //记录LRU信息，宏定义LRU_BITS是24 bits
+    int refcount;
+    void *ptr;
+} robj;
+```
+> redis中有一个全局变量lru_clock，记录当前的时间戳，单位是秒，因为精度是秒，所以一个key在一秒中被多次访问 对应的lru的值不会变化的；
+> 这个全局变量lru_clock更新周期，是在serverCron 函数作为时间事件的回调函数更新，其频率值是由 Redis 配置文件 redis.conf 中的 hz 配置项决定的。hz 配置项的默认值是 10，这表示 serverCron 函数会每 100 毫秒（1 秒 /10 = 100 毫秒）运行一次。
+> Redis 定义了一个数组 EvictionPoolLRU，用来保存待淘汰的候选键值对
+```c
+static struct evictionPoolEntry *EvictionPoolLRU;
+
+struct evictionPoolEntry {
+    unsigned long long idle;    //待淘汰的键值对的空闲时间
+    sds key;                    //待淘汰的键值对的key
+    sds cached;                 //缓存的SDS对象
+    int dbid;                   //待淘汰键值对的key所在的数据库ID
+};
+#define EVICTION_POOL_SIZE 16    //待淘汰键值对的数量
+```
+> redis进行缓存淘汰时，采集的key的数量是在redis.conf 中的配置项 maxmemory-samples 决定的，该配置项的默认值是 5
+> 触发数据淘汰机制是在触发数据淘汰的时机，是每次处理「请求」时判断的。也就是说，执行一个命令之前，首先要判断实例内存是否达到 maxmemory，
+> 是的话则先执行数据淘汰，再执行具体的命令
