@@ -22,6 +22,7 @@ struct __attribute__ ((__packed__)) sdshdr16 {
 - alloc：字符数组分配的空间长度
 - flags：SDS类型(sdshdr5、sdshdr8、sdshdr16、sdshdr32 和 sdshdr64)
 - buf[]：字符数组
+
 ```c
 struct redisObject {
     unsigned type:4;
@@ -323,3 +324,67 @@ struct evictionPoolEntry {
 > redis进行缓存淘汰时，采集的key的数量是在redis.conf 中的配置项 maxmemory-samples 决定的，该配置项的默认值是 5
 > 触发数据淘汰机制是在触发数据淘汰的时机，是每次处理「请求」时判断的。也就是说，执行一个命令之前，首先要判断实例内存是否达到 maxmemory，
 > 是的话则先执行数据淘汰，再执行具体的命令
+
+# Redis那么情况下回生成RDB文件
+> 同步save 命令 和异步bgsave会生成RDB文件，同时主从复制时底层会调用rdbSaveToSlavesSockets函数来生成RDB文件
+> 其他场景就是，Redis在执行flushall命令以及正常关闭时，会创建RDB文件
+![img_11.png](img_11.png)
+
+# RDB文件包含那些内容
+> RDB主要包含三个部分
+- 文件头: 保存了 Redis 的魔数、RDB 版本、Redis 版本、RDB 文件创建时间、键值对占用的内存大小等信息。
+- 数据部分: 保存了 Redis 实例中的所有数据库及其键值对数据。
+- 文件尾: 保存了RDB文件的结束标识符，保存了RDB 文件的校验和信息，用于验证 RDB 文件的完整性。
+![img_12.png](img_12.png)
+
+# 写入RDB格式大概是什么形式？
+> 首先RDB会有一个操作码，表示要写入的类型是什么
+```c
+#define RDB_OPCODE_IDLE       248   //标识LRU空闲时间
+#define RDB_OPCODE_FREQ       249   //标识LFU访问频率信息
+#define RDB_OPCODE_AUX        250   //标识RDB文件头的属性信息
+#define RDB_OPCODE_EXPIRETIME_MS 252    //标识以毫秒记录的过期时间
+#define RDB_OPCODE_SELECTDB   254   //标识文件中后续键值对所属的数据库编号
+#define RDB_OPCODE_EOF        255   //标识RDB文件结束，用在文件尾
+```
+> 已写入数据为例：首先会写入数据类型的类型码（比如String，RDB_TYPE_HASH_ZIPLIST - hash使用ziplist），
+> 然后就是记录key的长度和具体内容，然后是value的长度和具体内容
+
+# 什么是AOF
+> AOF（Append Only File）是 Redis 提供的一种持久化机制，通过将每个写操作命令追加到一个日志文件中来实现数据的持久化。
+> AOF 记录的是每个命令的「操作历史」，随着时间增长，AOF 文件会越来越大，所以需要 AOF 重写来「瘦身」，减小文件体积
+
+# Redis什么情况下会进行AOF重写？
+> 出发AOF重写主要有4个时机
+- 执行bgrewriteaof 命令
+- 手动打开 AOF 开关（config set appendonly yes）
+- 从库加载完主库 RDB 后（AOF 被启动的前提下）
+- 定时触发：AOF 文件大小比例超出阈值、AOF 文件大小绝对值超出阈值（AOF 被启动的前提下），对应配置为
+  - auto-aof-rewrite-percentage：AOF 文件大小超出基础大小的比例，默认值为 100%，即超出 1 倍大小。
+  - auto-aof-rewrite-min-size：AOF 文件大小绝对值的最小值，默认为 64MB。
+> 并且AOF在重写期间会禁用 rehash，不让父进程调整哈希表大小，目的是父进程「写时复制」拷贝大量内存页面。
+
+# Redis生成RDB和AOF能否同时进行？
+> 不会同时进行，从性能上考虑RDB 还是 AOF 重写，都需要创建子进程，然后把实例中的所有数据写到磁盘上，这个过程中涉及到两块：
+- CPU的消息：写盘之前需要获取遍历获取全量数据，会消耗CPU性能
+- 磁盘：RDB和AOF都需要进行落盘操作，当同时进行时，磁盘IO消耗过大。
+
+# AOF重写过程中，产生的新命令怎么记录？
+> 父进程 fork 出子进程，子进程迭代实例所有数据，写到一个临时 AOF 文件，在写文件期间，父进程收到新的写操作，会先缓存到 buf 中，
+> 之后父进程把 buf 中的数据，通过管道发给子进程，子进程写完 AOF 文件后，会从管道中读取这些命令，再追加到 AOF 文件中，最后 rename 这个临时 AOF 文件为新文件，替换旧的 AOF 文件，重写结束
+
+# AOF重写的过程中，如何进行父子进行间的通信？
+> 父子进程的数据传输是通过操作系统提供的“管道”机制来实现的
+> 父子进程用了 3 个管道，分别传输不同类别的数据
+- 父进程传输数据给子进程的管道：发送 AOF 重写期间新的写操作
+- 子进程完成重写后通知父进程的管道：让父进程停止发送新的写操作
+- 父进程确认收到子进程通知的管道：父进程通知子进程已收到通知
+
+# Raft算法的核心流程
+- 集群正常情况下，Leader 会持续给 Follower 发心跳消息，维护 Leader 地位
+- 如果 Follower 一段时间内收不到 Leader 心跳消息，则变为 Candidate 发起选举
+- Candidate 会给自己投票，并向其他节点发送投票请求
+- 其他节点收到投票请求后，如果没有投过票，则会给 Candidate 投票
+- 当 Candidate 收到大多数节点的投票后，变为 Leader，新 Leader 给其它 Follower 发心跳消息，维护新的 Leader 地位
+- Candidate 投票期间，收到了 Leader 心跳消息，则自动变为 Follower
+- 投票结束后，没有超过半数确认票的实例，选举失败，会再次发起选举
