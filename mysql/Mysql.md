@@ -38,7 +38,7 @@ select master_pos_wait(file, pos[, timeout]);
   - 其他值，则到主库上进行查询
 ```sql
 # 个库执行的事务中包含传入的 gtid_set，返回 0，否则超时返回1
-# 在mysql5.7.6 版本之后，允许执行万更新语句后，返回对应的事务的GTID，
+# 在mysql5.7.6 版本之后，允许执行一句更新语句后，返回对应的事务的GTID，
 # 这样可以减少使用show master status命令
 select wait_for_executed_gtid_set(gtid_set, 1);
 ```
