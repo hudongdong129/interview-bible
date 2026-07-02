@@ -36,3 +36,5 @@ public static void main(String[] args) {
 | runtime| runtime,test |是 |
 | test| test |否 |
 | system| compile, test |是 |
+
+#  Caffeine 的三级架构 W-TinyLFU

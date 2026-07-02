@@ -254,7 +254,7 @@ protected Object initializeBean(final String beanName, final Object bean, @Nulla
 | 代理是由目标对象创建的, 并且切面应用在这些代理上|在执行应用程序之前 (在运行时) 前, 各方面直接在代码中进行织入 |
 | 性能差|性能更好 |
 
-# 8、Spring 失效的几种场景
+# 8、Spring 事务失效的几种场景
 > 1、使用注解@Transactional时，如果方法是private的, 或者被final，那么事务失效
 > 
 > 2、类内部之间的方法调用导致的失效
@@ -268,6 +268,18 @@ protected Object initializeBean(final String beanName, final Object bean, @Nulla
 > 6、本身不是spring管理的bean对象
 > 
 > 7、多线程调用时。
+
+# 9、spring 有哪些方式可以生成Bean
+> 1、XML 配置文件
+> 2、注解方式（自动扫描 + 注解）
+>   2.1 @Component 及其派生注解：在类上标记 @Component、@Service、@Repository、@Controller，配合包扫描（<context:component-scan> 或 @ComponentScan）自动生成 Bean。
+>   2.2 @Bean 注解（Java 配置类）：在 @Configuration 类中，通过 @Bean 方法显式声明 Bean。
+> 3、实现 FactoryBean 接口
+> 4、使用 BeanDefinition 注册 API：通过编程方式向容器注册 BeanDefinition。例如在 ImportBeanDefinitionRegistrar 实现类中
+> 5、@Import 导入类或配置：@Import 可以直接将一个普通类作为一个 Bean 导入容器，或者导入 ImportSelector、ImportBeanDefinitionRegistrar 的实现类。
+> 6、Supplier 方式（Spring 5+）：通过 GenericApplicationContext 的 registerBean 方法，使用 Supplier 提供 Bean 实例
+> 7、通过 BeanPostProcessor 间接生成
+> 8、基于 Groovy 配置（较少用）
 
 
 
